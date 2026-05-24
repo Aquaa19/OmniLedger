@@ -5,6 +5,7 @@ import {
   Pressable,
   StatusBar,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -71,9 +72,20 @@ const tabs: Route[] = [
   'Profile',
 ];
 
+const imageEntries = Object.entries(images) as [Route, ImageSourcePropType][];
+
 function App() {
   const [route, setRoute] = useState<Route>('Splash');
   const [, setHistory] = useState<Route[]>([]);
+
+  useEffect(() => {
+    imageEntries.forEach(([, source]) => {
+      const asset = Image.resolveAssetSource(source);
+      if (asset?.uri) {
+        Image.prefetch(asset.uri);
+      }
+    });
+  }, []);
 
   const go = useCallback((next: Route) => {
     setHistory(previous => [...previous, route]);
@@ -114,14 +126,27 @@ function ReferenceScreen({
   go: (route: Route) => void;
   back: () => void;
 }) {
+  const {width, height} = useWindowDimensions();
+  const asset = Image.resolveAssetSource(images[route]);
+  const availableWidth = width;
+  const availableHeight = height;
+  const assetRatio = asset.width / asset.height;
+  const isLargeScreen = width >= 768;
+  const maxCanvasWidth = isLargeScreen ? Math.min(width * 0.72, 620) : width;
+  const widthFromHeight = availableHeight * assetRatio;
+  const canvasWidth = Math.min(maxCanvasWidth, availableWidth, widthFromHeight);
+  const canvasHeight = canvasWidth / assetRatio;
+
   return (
     <View style={styles.screen}>
-      <Image source={images[route]} resizeMode="stretch" style={styles.reference} />
-      {route !== 'Splash' && route !== 'Onboarding' && !tabs.includes(route) ? (
-        <Hotspot x={0} y={0} w={0.2} h={0.12} onPress={back} />
-      ) : null}
-      <RouteHotspots route={route} go={go} back={back} />
-      {tabs.includes(route) ? <TabHotspots go={go} /> : null}
+      <View style={[styles.canvas, {height: canvasHeight, width: canvasWidth}]}>
+        <Image source={images[route]} resizeMode="contain" style={styles.reference} />
+        {route !== 'Splash' && route !== 'Onboarding' && !tabs.includes(route) ? (
+          <Hotspot x={0} y={0} w={0.2} h={0.12} onPress={back} />
+        ) : null}
+        <RouteHotspots route={route} go={go} back={back} />
+        {tabs.includes(route) ? <TabHotspots go={go} /> : null}
+      </View>
     </View>
   );
 }
@@ -308,8 +333,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screen: {
+    alignItems: 'center',
     backgroundColor: '#f8f9ff',
     flex: 1,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  canvas: {
+    backgroundColor: '#f8f9ff',
+    overflow: 'hidden',
   },
   reference: {
     height: '100%',
